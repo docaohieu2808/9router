@@ -41,7 +41,10 @@ function toContentBlocks(content) {
         if (part.type === OPENAI_BLOCK.TEXT && typeof part.text === "string") {
           blocks.push({ type: OPENAI_BLOCK.TEXT, text: part.text });
         } else if (part.type === OPENAI_BLOCK.IMAGE_URL || part.type === OPENAI_BLOCK.IMAGE) {
-          blocks.push({ type: OPENAI_BLOCK.TEXT, text: "[image omitted]" });
+          // This wire uses the AI SDK block shape (text / tool-call / tool-result),
+          // which has an image block too — "[image omitted]" threw the picture away.
+          const image = part.image_url?.url || part.image_url || part.image || part.source?.data;
+          if (image) blocks.push({ type: "image", image });
         } else if (typeof part.text === "string") {
           blocks.push({ type: OPENAI_BLOCK.TEXT, text: part.text });
         }
@@ -55,7 +58,11 @@ function toContentBlocks(content) {
 function safeParseJson(s) {
   if (s == null) return {};
   if (typeof s !== "string") return s;
-  try { return JSON.parse(s); } catch { return {}; }
+  try { return JSON.parse(s); } catch { /* fall through */ }
+  // Returning {} silently discarded whatever the model had actually produced,
+  // so the tool ran with no arguments at all. Hand the raw text through instead
+  // and let the tool (or the upstream) report a real parse error.
+  return { _raw_arguments: s };
 }
 
 function convertMessages(messages = []) {

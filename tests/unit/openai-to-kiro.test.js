@@ -142,9 +142,14 @@ describe("openaiToKiroRequest", () => {
       const result = openaiToKiroRequest("claude-sonnet-4.6", body, true, {});
 
       const currentMsg = result.conversationState.currentMessage;
-      // HTTP URLs are not supported by Kiro — converted to text placeholder
-      expect(currentMsg.userInputMessage.images).toBeUndefined();
-      expect(currentMsg.userInputMessage.content).toContain("[Image: https://example.com/photo.jpg]");
+      // Kiro only accepts inline bytes, so a remote url is carried as a pending
+      // { source: { url } } image and KiroExecutor fetches the bytes before the
+      // request goes out. It used to be flattened into "[Image: url]" text,
+      // which lost the picture entirely.
+      expect(currentMsg.userInputMessage.images).toEqual([
+        { format: "jpg", source: { url: "https://example.com/photo.jpg" } }
+      ]);
+      expect(currentMsg.userInputMessage.content).not.toContain("[Image:");
     });
   });
 

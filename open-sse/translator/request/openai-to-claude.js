@@ -239,6 +239,17 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
           }
         } else if (part.type === OPENAI_BLOCK.IMAGE && part.source) {
           blocks.push({ type: CLAUDE_BLOCK.IMAGE, source: part.source });
+        } else if (part.type === "input_audio" && part.input_audio?.data) {
+          // Claude has no audio content block. Forwarding it as a document keeps
+          // the payload intact so a Claude-compatible gateway that does accept
+          // audio can use it, and an upstream that cannot answers with an
+          // explicit error — better than the router quietly answering a
+          // question about audio the model never received.
+          const format = part.input_audio.format || "wav";
+          blocks.push({
+            type: CLAUDE_BLOCK.DOCUMENT,
+            source: { type: "base64", media_type: `audio/${format}`, data: part.input_audio.data }
+          });
         } else if (part.type === OPENAI_BLOCK.FILE && part.file) {
           // OpenAI file block -> Claude document (PDF only; Claude rejects other mimes).
           const fileData = part.file.file_data;
@@ -318,7 +329,11 @@ function convertOpenAIToolChoice(choice) {
   // OpenAI string forms: "auto" | "none" | "required"
   if (typeof choice === "string") {
     if (choice === "required") return { type: "any" };
-    return { type: "auto" }; // "auto", "none", or anything unexpected
+    // "none" is a type Claude accepts, and it carries the opposite intent to
+    // "auto": mapping it to auto let the model call tools the client had just
+    // forbidden.
+    if (choice === "none") return { type: "none" };
+    return { type: "auto" }; // "auto" or anything unexpected
   }
 
   if (typeof choice === "object") {

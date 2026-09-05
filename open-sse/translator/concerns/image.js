@@ -122,3 +122,32 @@ export async function fetchImageAsBase64(imageUrl, options = {}) {
     dispatcher.close().catch(() => {});
   }
 }
+
+// Kiro (and any upstream that only accepts inline bytes) needs remote images
+// resolved before the request goes out. The request translator marks them as
+// { source: { url } }; this fills in the bytes and drops what it cannot fetch,
+// so an unreachable image never travels as a broken reference.
+export async function inlineKiroImages(body, { timeoutMs = 15000 } = {}) {
+  const buckets = [];
+  const visit = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) { for (const n of node) visit(n); return; }
+    if (Array.isArray(node.images)) buckets.push(node);
+    for (const key of Object.keys(node)) visit(node[key]);
+  };
+  visit(body);
+  for (const holder of buckets) {
+    const resolved = [];
+    for (const img of holder.images) {
+      if (img?.source?.bytes) { resolved.push(img); continue; }
+      const url = img?.source?.url;
+      if (!url) continue;
+      const fetched = await fetchImageAsBase64(url, { timeoutMs });
+      if (!fetched?.base64) continue;
+      const format = (fetched.mimeType || "image/png").split("/")[1] || "png";
+      resolved.push({ format, source: { bytes: fetched.base64 } });
+    }
+    holder.images = resolved;
+    if (resolved.length === 0) delete holder.images;
+  }
+}

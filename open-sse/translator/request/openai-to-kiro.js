@@ -121,8 +121,12 @@ function convertMessages(messages, model) {
               const format = parsed.mimeType.split("/")[1] || parsed.mimeType;
               pendingImages.push({ format, source: { bytes: parsed.base64 } });
             } else if (url.startsWith("http://") || url.startsWith("https://")) {
-              // Kiro only supports base64 — fallback to URL text
-              textParts.push(`[Image: ${url}]`);
+              // Kiro only accepts inline bytes, but flattening the image into
+              // "[Image: url]" text threw the picture away. Keep it structured
+              // and let KiroExecutor fetch the bytes before sending.
+              const ext = (url.split("?")[0].split(".").pop() || "").toLowerCase();
+              const format = ["png", "jpeg", "jpg", "gif", "webp"].includes(ext) ? ext : "png";
+              pendingImages.push({ format, source: { url } });
             }
           } else if (c.type === CLAUDE_BLOCK.IMAGE) {
             // Claude format: source.type = "base64", source.media_type, source.data
@@ -306,7 +310,12 @@ function convertMessages(messages, model) {
 export function openaiToKiroRequest(model, body, stream, credentials) {
   const messages = body.messages || [];
   const tools = body.tools || [];
-  const maxTokens = 32000;
+  // Was hardcoded to 32000, so a client asking for a short answer got a long one.
+  const KIRO_MAX_TOKENS_CEILING = 32000;
+  const requested = Number(body.max_tokens);
+  const maxTokens = Number.isFinite(requested) && requested > 0
+    ? Math.min(requested, KIRO_MAX_TOKENS_CEILING)
+    : KIRO_MAX_TOKENS_CEILING;
   const temperature = body.temperature;
   const topP = body.top_p;
 

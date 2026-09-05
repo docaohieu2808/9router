@@ -9,15 +9,20 @@ const O2R = (body) => translateRequest(FORMATS.OPENAI, FORMATS.OPENAI_RESPONSES,
 
 describe("Codex CLI Responses → OpenAI", () => {
   // openai-responses.js:103 — function_call with empty name skipped, can leave tool_calls: []
-  // KNOWN BUG: empty tool_calls array is rejected by OpenAI/Codex
-  it.fails("assistant has no empty tool_calls array when all names are empty", () => {
+  // Fixed on this fork.
+  // A nameless call cannot be forwarded (Codex/OpenAI reject it) and a name
+  // cannot be invented, so the turn is dropped entirely — what must never happen
+  // is an assistant message carrying tool_calls: [], which is itself rejected.
+  it("never emits an assistant message with an empty tool_calls array", () => {
     const out = R2O({
       input: [
         { type: "function_call", call_id: "c1", name: "", arguments: "{}" },
       ],
     });
-    const asst = out.messages.find((m) => m.role === "assistant" && m.tool_calls);
-    expect(asst?.tool_calls?.length ?? 0, "empty tool_calls[] produced").toBeGreaterThan(0);
+    const withEmpty = out.messages.filter(
+      (m) => Array.isArray(m.tool_calls) && m.tool_calls.length === 0
+    );
+    expect(withEmpty, "empty tool_calls[] produced").toHaveLength(0);
   });
 
   it("function_call arguments end up as a string", () => {
@@ -29,8 +34,8 @@ describe("Codex CLI Responses → OpenAI", () => {
   });
 
   // openai-responses.js:75-77 — input_image uses file_id as raw url
-  // KNOWN BUG
-  it.fails("input_image with file_id is not used as a raw url", () => {
+  // Fixed on this fork.
+  it("input_image with file_id is not used as a raw url", () => {
     const out = R2O({
       input: [{ type: "message", role: "user", content: [
         { type: "input_image", file_id: "file-abc" },

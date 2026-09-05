@@ -83,8 +83,16 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
           if (c.type === RESPONSES_ITEM.INPUT_TEXT) return { type: OPENAI_BLOCK.TEXT, text: c.text };
           if (c.type === RESPONSES_ITEM.OUTPUT_TEXT) return { type: OPENAI_BLOCK.TEXT, text: c.text };
           if (c.type === RESPONSES_ITEM.INPUT_IMAGE) {
-            const url = c.image_url || c.file_id || "";
-            return { type: OPENAI_BLOCK.IMAGE_URL, image_url: { url, detail: c.detail || "auto" } };
+            // A bare file_id is a handle into OpenAI's file store, not a URL —
+            // passing it off as one produced an image_url the upstream could not
+            // resolve. Forward it as the file part it actually is.
+            if (!c.image_url && c.file_id) {
+              return { type: "file", file: { file_id: c.file_id } };
+            }
+            return {
+              type: OPENAI_BLOCK.IMAGE_URL,
+              image_url: { url: c.image_url || "", detail: c.detail || "auto" }
+            };
           }
           return c;
         })
@@ -99,6 +107,10 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
       result.messages.push(msg);
     }
     else if (itemType === RESPONSES_ITEM.FUNCTION_CALL || itemType === RESPONSES_ITEM.CUSTOM_TOOL_CALL) {
+      // Nameless calls are skipped below; checking first avoids opening an
+      // assistant message that would then be emitted with tool_calls: [], which
+      // OpenAI and Codex both reject (#444).
+      if (!item.name || typeof item.name !== "string" || item.name.trim() === "") continue;
       // Start or append to assistant message with tool_calls
       if (!currentAssistantMsg) {
         currentAssistantMsg = {
@@ -108,8 +120,7 @@ export function openaiResponsesToOpenAIRequest(model, body, stream, credentials)
         };
         attachPendingReasoning(currentAssistantMsg);
       }
-      // Skip items with empty/missing name — Codex/OpenAI reject nameless tool calls (#444)
-      if (!item.name || typeof item.name !== "string" || item.name.trim() === "") continue;
+
       if (itemType === RESPONSES_ITEM.CUSTOM_TOOL_CALL) customToolNames.add(item.name);
       const toolInput = itemType === RESPONSES_ITEM.CUSTOM_TOOL_CALL
         ? { input: typeof item.input === "string" ? item.input : JSON.stringify(item.input ?? "") }

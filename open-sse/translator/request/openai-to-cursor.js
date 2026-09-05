@@ -14,13 +14,21 @@ import { DEFAULT_MIN_TOKENS } from "../../config/runtimeConfig.js";
 function extractContent(content) {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
-    return content
-      .filter(part => {
-        if (!part || typeof part !== "object") return false;
-        return part.type === OPENAI_BLOCK.TEXT && typeof part.text === "string";
-      })
+    // Text-only turns stay a plain string, exactly as before. Only when the turn
+    // actually carries an image is the array shape kept — dropping the image
+    // outright meant a user who pasted a screenshot was answered as if they had
+    // sent nothing.
+    const images = content.filter(
+      part => part && typeof part === "object" &&
+        (part.type === OPENAI_BLOCK.IMAGE_URL || part.type === OPENAI_BLOCK.IMAGE)
+    );
+    const text = content
+      .filter(part => part && typeof part === "object" &&
+        part.type === OPENAI_BLOCK.TEXT && typeof part.text === "string")
       .map(part => part.text || "")
       .join("");
+    if (images.length === 0) return text;
+    return [{ type: OPENAI_BLOCK.TEXT, text }, ...images];
   }
   return "";
 }
@@ -104,8 +112,15 @@ function convertMessages(messages) {
     if (msg.role === ROLE.USER || msg.role === ROLE.ASSISTANT) {
       if (msg.role === ROLE.USER && Array.isArray(msg.content)) {
         const parts = [];
+        // Images used to fall through this loop and vanish; keep them aside and
+        // re-attach them below so a pasted screenshot still reaches the model.
+        const images = [];
         for (const block of msg.content) {
           if (!block || typeof block !== "object") continue;
+          if (block.type === OPENAI_BLOCK.IMAGE_URL || block.type === OPENAI_BLOCK.IMAGE) {
+            images.push(block);
+            continue;
+          }
           if (block.type === CLAUDE_BLOCK.TEXT) {
             if (typeof block.text === "string") {
               parts.push(block.text || "");
@@ -123,7 +138,14 @@ function convertMessages(messages) {
           }
         }
         const joined = parts.filter(Boolean).join("\n");
-        if (joined) result.push({ role: ROLE.USER, content: joined });
+        if (images.length > 0) {
+          result.push({
+            role: ROLE.USER,
+            content: [{ type: OPENAI_BLOCK.TEXT, text: joined }, ...images]
+          });
+        } else if (joined) {
+          result.push({ role: ROLE.USER, content: joined });
+        }
         continue;
       }
 
@@ -178,7 +200,11 @@ export function openaiToCursorRequest(model, body, stream, credentials) {
   return {
     ...rest,
     messages,
-    max_tokens: DEFAULT_MIN_TOKENS
+    // Was pinned to DEFAULT_MIN_TOKENS, so a client asking for a longer or
+    // shorter answer never got one.
+    max_tokens: Number.isFinite(Number(body.max_tokens)) && Number(body.max_tokens) > 0
+      ? Number(body.max_tokens)
+      : DEFAULT_MIN_TOKENS
   };
 }
 

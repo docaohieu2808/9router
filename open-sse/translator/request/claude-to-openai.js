@@ -140,6 +140,16 @@ function systemReminderText(content) {
   return `<instructions>\n${text}\n</instructions>`;
 }
 
+// A Claude image block is either inline base64 or a plain remote url; only the
+// base64 shape used to be handled, so url images vanished from the request.
+function claudeImageToUrl(block) {
+  const src = block?.source;
+  if (!src) return null;
+  if (src.type === "base64" && src.data) return encodeDataUri(src.media_type, src.data);
+  if (src.type === "url" && src.url) return src.url;
+  return src.url || null;
+}
+
 // Convert single Claude message - returns single message or array of messages
 function convertClaudeMessage(msg) {
   // Mid-conversation system message -> user (per Anthropic placement rules)
@@ -160,6 +170,9 @@ function convertClaudeMessage(msg) {
     const parts = [];
     const toolCalls = [];
     const toolResults = [];
+    // OpenAI has no thinking block; carry it out-of-band on reasoning_content so
+    // openai-to-claude can rebuild it on the way back instead of losing it.
+    const reasoningParts = [];
 
     for (const block of msg.content) {
       switch (block.type) {
@@ -167,15 +180,19 @@ function convertClaudeMessage(msg) {
           parts.push({ type: OPENAI_BLOCK.TEXT, text: block.text });
           break;
 
-        case CLAUDE_BLOCK.IMAGE:
-          if (block.source?.type === "base64") {
-            parts.push({
-              type: OPENAI_BLOCK.IMAGE_URL,
-              image_url: {
-                url: encodeDataUri(block.source.media_type, block.source.data)
-              }
-            });
-          }
+        case CLAUDE_BLOCK.IMAGE: {
+          const imageUrl = claudeImageToUrl(block);
+          if (imageUrl) parts.push({ type: OPENAI_BLOCK.IMAGE_URL, image_url: { url: imageUrl } });
+          break;
+        }
+
+        case CLAUDE_BLOCK.THINKING:
+          if (block.thinking) reasoningParts.push(block.thinking);
+          break;
+
+        case CLAUDE_BLOCK.REDACTED_THINKING:
+          // Opaque blob; keep it verbatim so a Claude target can hand it back.
+          if (block.data) reasoningParts.push(block.data);
           break;
 
         case CLAUDE_BLOCK.TOOL_USE:
@@ -189,7 +206,7 @@ function convertClaudeMessage(msg) {
           });
           break;
 
-        case CLAUDE_BLOCK.TOOL_RESULT:
+        case CLAUDE_BLOCK.TOOL_RESULT: {
           let resultContent = "";
           if (typeof block.content === "string") {
             resultContent = block.content;
@@ -197,17 +214,37 @@ function convertClaudeMessage(msg) {
             resultContent = block.content
               .filter(c => c.type === CLAUDE_BLOCK.TEXT)
               .map(c => c.text)
-              .join("\n") || JSON.stringify(block.content);
+              .join("\n");
+            // An OpenAI tool message may only carry a string, so images coming
+            // back from a tool ride along on the user turn that follows it —
+            // previously the whole array was JSON.stringify'd and the picture
+            // reached the model as raw base64 gibberish.
+            for (const c of block.content) {
+              if (c?.type !== CLAUDE_BLOCK.IMAGE) continue;
+              const imageUrl = claudeImageToUrl(c);
+              if (imageUrl) parts.push({ type: OPENAI_BLOCK.IMAGE_URL, image_url: { url: imageUrl } });
+            }
+            if (!resultContent) {
+              const hasImage = block.content.some(c => c?.type === CLAUDE_BLOCK.IMAGE);
+              resultContent = hasImage ? "Image result attached to the next message." : "";
+            }
           } else if (block.content) {
             resultContent = JSON.stringify(block.content);
           }
-          
+
+          // OpenAI has no is_error on a tool message; say it in the content so
+          // the model can still tell a failed call from a successful one.
+          if (block.is_error) {
+            resultContent = `Tool call failed (is_error=true).\n${resultContent}`.trim();
+          }
+
           toolResults.push({
             role: ROLE.TOOL,
             tool_call_id: block.tool_use_id,
             content: resultContent
           });
           break;
+        }
       }
     }
 
@@ -219,22 +256,29 @@ function convertClaudeMessage(msg) {
       return toolResults;
     }
 
+    const reasoning = reasoningParts.join("\n");
+
     // If has tool calls, return assistant message with tool_calls
     if (toolCalls.length > 0) {
       const result = { role: ROLE.ASSISTANT };
       if (parts.length > 0) {
         result.content = collapseTextParts(parts);
       }
+      if (reasoning) result.reasoning_content = reasoning;
       result.tool_calls = toolCalls;
       return result;
     }
 
     // Return content
     if (parts.length > 0) {
-      return {
-        role,
-        content: collapseTextParts(parts)
-      };
+      const message = { role, content: collapseTextParts(parts) };
+      if (reasoning && role === ROLE.ASSISTANT) message.reasoning_content = reasoning;
+      return message;
+    }
+
+    // Thinking-only assistant turn: keep the reasoning rather than drop the message.
+    if (reasoning && role === ROLE.ASSISTANT) {
+      return { role, content: "", reasoning_content: reasoning };
     }
     
     // Empty content array

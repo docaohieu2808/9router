@@ -8,6 +8,7 @@ import { isValidClaudeSignature } from "../../utils/claudeSignature.js";
 import { PROVIDERS } from "../../providers/index.js";
 import { getCapabilitiesForModel } from "../../providers/capabilities.js";
 import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig.js";
+import { CLAUDE_SYSTEM_PROMPT } from "../../config/appConstants.js";
 
 const CACHE_CONTROL_5M = { type: "ephemeral" };
 const CACHE_CONTROL_1H = { type: "ephemeral", ttl: "1h" };
@@ -321,6 +322,16 @@ export function anchorClaudeCache(body) {
 // - Fix tool_use/tool_result ordering
 // - Apply cloaking (billing header + fake user ID) for OAuth tokens
 export function prepareClaudeRequest(body, provider = null, apiKey = null, connectionId = null, rawHeaders = null, sessionId = null) {
+  // openai-to-claude prepends the Claude Code system prompt unconditionally: it is
+  // what makes Anthropic's own OAuth path bill and behave as Claude Code. On a
+  // third-party Claude-compatible gateway it is just someone else's identity
+  // leaking into the prompt, so drop it there — the executor already strips the
+  // matching first-party headers for the same providers.
+  if (provider?.startsWith?.("anthropic-compatible-") && Array.isArray(body.system)) {
+    body.system = body.system.filter((b) => b?.text !== CLAUDE_SYSTEM_PROMPT);
+    if (body.system.length === 0) delete body.system;
+  }
+
   // quirk: MiniMax's Claude-compatible endpoint rejects Anthropic's output_config (400 invalid params)
   if (PROVIDERS[provider]?.quirks?.dropOutputConfig) {
     delete body.output_config;

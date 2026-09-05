@@ -11,10 +11,11 @@ const T = (body) =>
 
 describe("OpenAI → Claude context mapping", () => {
   // openai-to-claude.js:124-134 — always injects CLAUDE_SYSTEM_PROMPT ("You are Claude Code")
-  // KNOWN BUG: pollutes requests for non-official Claude-compatible providers
-  it.fails("does not inject Claude Code system prompt for compatible providers", () => {
+  // Fixed on this fork.
+  it("does not inject Claude Code system prompt for compatible providers", () => {
     const out = T({ messages: [{ role: "user", content: "hi" }] });
-    expect(JSON.stringify(out.system), "Claude Code prompt injected").not.toContain("Claude Code");
+    // system may be absent entirely once the injected block is the only one.
+    expect(JSON.stringify(out.system ?? ""), "Claude Code prompt injected").not.toContain("Claude Code");
   });
 
   it("assistant reasoning_content becomes a thinking block", () => {
@@ -34,8 +35,8 @@ describe("OpenAI → Claude context mapping", () => {
   });
 
   // openai-to-claude.js:298 — tool_choice "none" mapped to {type:"auto"} (loses "do not call" intent)
-  // KNOWN BUG
-  it.fails("tool_choice=none is not turned into auto", () => {
+  // Fixed on this fork.
+  it("tool_choice=none is not turned into auto", () => {
     const out = T({
       messages: [{ role: "user", content: "hi" }],
       tools: [{ type: "function", function: { name: "f", parameters: { type: "object", properties: {} } } }],
@@ -45,8 +46,8 @@ describe("OpenAI → Claude context mapping", () => {
   });
 
   // getContentBlocksFromMessage — no input_audio branch → audio dropped
-  // KNOWN BUG
-  it.fails("input_audio content is preserved", () => {
+  // Fixed on this fork.
+  it("input_audio content is preserved", () => {
     const out = T({
       messages: [{ role: "user", content: [
         { type: "text", text: "transcribe" },
