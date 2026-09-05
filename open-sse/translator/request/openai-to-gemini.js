@@ -92,6 +92,11 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
     }
   }
 
+  // Gemini takes a single systemInstruction, so several system messages have to
+  // be merged into one — assigning per message kept only the last and silently
+  // dropped every earlier instruction.
+  const systemParts = [];
+
   // Convert messages
   if (body.messages && Array.isArray(body.messages)) {
     for (let i = 0; i < body.messages.length; i++) {
@@ -100,10 +105,8 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
       const content = msg.content;
 
       if (role === ROLE.SYSTEM && body.messages.length > 1) {
-        result.systemInstruction = {
-          role: GEMINI_ROLE.USER,
-          parts: [{ text: typeof content === "string" ? content : extractTextContent(content) }]
-        };
+        const text = typeof content === "string" ? content : extractTextContent(content);
+        if (text) systemParts.push({ text });
       } else if (role === ROLE.USER || (role === ROLE.SYSTEM && body.messages.length === 1)) {
         const parts = convertOpenAIContentToParts(content);
         if (parts.length > 0) {
@@ -195,6 +198,10 @@ function openaiToGeminiBase(model, body, stream, signature = DEFAULT_THINKING_AG
         }
       }
     }
+  }
+
+  if (systemParts.length > 0) {
+    result.systemInstruction = { role: GEMINI_ROLE.USER, parts: systemParts };
   }
 
   // Convert tools
