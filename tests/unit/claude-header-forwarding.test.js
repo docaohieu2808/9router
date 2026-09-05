@@ -196,40 +196,11 @@ describe("proxyAwareFetch — api.anthropic.com routing", () => {
     vi.restoreAllMocks();
   });
 
-  // The whole got-scraping path in open-sse/utils/proxyFetch.js has been inside a
-  // block comment since a648a42b; line ~352 keeps the note "Re-enable per-host by
-  // wrapping with tryGotScrapingFetch when needed". Nothing routes through it
-  // today, so this stays it.fails until someone turns it back on.
-  it.fails("routes api.anthropic.com to gotScraping (non-streaming) and returns ok response", async () => {
-    // Mock got-scraping before module load
-    vi.doMock("got-scraping", () => {
-      const mockGotScraping = vi.fn().mockResolvedValue({
-        statusCode: 200,
-        statusMessage: "OK",
-        headers: { "content-type": "application/json" },
-        rawBody: Buffer.from(JSON.stringify({ id: "msg_test" })),
-      });
-      mockGotScraping.stream = vi.fn();
-      return { gotScraping: mockGotScraping };
-    });
-
-    vi.resetModules();
-    const { proxyAwareFetch } = await import("open-sse/utils/proxyFetch.js");
-    const { gotScraping } = await import("got-scraping");
-
-    const res = await proxyAwareFetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      // No Accept: text/event-stream → non-streaming path
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-3-5-sonnet-20241022", messages: [] }),
-    });
-
-    expect(gotScraping).toHaveBeenCalledOnce();
-    expect(res.ok).toBe(true);
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.id).toBe("msg_test");
-  });
+  // The got-scraping route is gone, not merely switched off: proxyFetch.js keeps
+  // the implementation inside a block comment (a648a42b) and the package is not
+  // in dependencies or node_modules at all. A test for it could only ever assert
+  // a call that cannot happen, so it is removed rather than left marked — bring
+  // it back together with the dependency if per-host JA3 is ever wanted again.
 
   it("falls back gracefully when got-scraping throws on non-streaming path", async () => {
     vi.doMock("got-scraping", () => {

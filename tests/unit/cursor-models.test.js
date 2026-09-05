@@ -1,11 +1,41 @@
+import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// cursorModels.js speaks raw HTTP/2 (agent.api5.cursor.sh is h2-only and undici
+// cannot do h2), so there is no fetch to stub — the http2 module itself is the
+// seam. `h2` records what the client sent so the request can be asserted.
+const h2 = vi.hoisted(() => ({ connects: [], requests: [], reply: null }));
+
+vi.mock("http2", () => {
+  const connect = vi.fn((authority) => {
+    h2.connects.push(authority);
+    const client = new EventEmitter();
+    client.close = vi.fn();
+    client.request = vi.fn((headers) => {
+      const req = new EventEmitter();
+      const record = { authority, headers, body: null };
+      h2.requests.push(record);
+      req.end = (body) => {
+        record.body = body;
+        // Reply on a later tick so the caller can attach its listeners first.
+        setImmediate(() => {
+          const { status, payload } = h2.reply || { status: 200, payload: new Uint8Array() };
+          req.emit("response", { ":status": String(status) });
+          if (payload?.length) req.emit("data", Buffer.from(payload));
+          req.emit("end");
+        });
+      };
+      return req;
+    });
+    return client;
+  });
+  return { default: { connect }, connect };
+});
 import {
   clearCursorModelCache,
   parseCursorUsableModels,
   resolveCursorModels,
 } from "../../open-sse/services/cursorModels.js";
-
-const originalFetch = global.fetch;
 
 function varint(value) {
   const bytes = [];
@@ -43,10 +73,12 @@ function model(id, name) {
 describe("Cursor live model catalog", () => {
   beforeEach(() => {
     clearCursorModelCache();
+    h2.connects.length = 0;
+    h2.requests.length = 0;
+    h2.reply = null;
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
     clearCursorModelCache();
   });
 
@@ -63,14 +95,8 @@ describe("Cursor live model catalog", () => {
     ]);
   });
 
-  // open-sse/services/cursorModels.js no longer goes through global.fetch: the
-  // catalog is an unframed Connect unary call issued over a raw Node http2/https
-  // client (see fetchCursorCatalog -> req.end(...)), so stubbing global.fetch
-  // never intercepts it and resolveCursorModels falls through to null. Repairing
-  // this means mocking the node client; left it.fails until someone needs Cursor.
-  it.fails("fetches the account-specific catalog and caches it", async () => {
-    const payload = concat(model("claude-4.6-opus", "Claude 4.6 Opus"));
-    global.fetch = vi.fn().mockResolvedValue(new Response(payload, { status: 200 }));
+  it("fetches the account-specific catalog and caches it", async () => {
+    h2.reply = { status: 200, payload: concat(model("claude-4.6-opus", "Claude 4.6 Opus")) };
     const credentials = {
       accessToken: "cursor-token",
       providerSpecificData: { machineId: "machine-id" },
@@ -79,26 +105,25 @@ describe("Cursor live model catalog", () => {
     await expect(resolveCursorModels(credentials)).resolves.toEqual({
       models: [{ id: "claude-4.6-opus", name: "Claude 4.6 Opus" }],
     });
+    // Second call must come off the cache, not the wire.
     await expect(resolveCursorModels(credentials)).resolves.toEqual({
       models: [{ id: "claude-4.6-opus", name: "Claude 4.6 Opus" }],
     });
 
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledWith(
-      "https://agent.api5.cursor.sh/agent.v1.AgentService/GetUsableModels",
-      expect.objectContaining({
-        method: "POST",
-        body: expect.any(Uint8Array),
-        headers: expect.objectContaining({
-          "content-type": "application/proto",
-          accept: "application/proto",
-        }),
-      }),
-    );
+    expect(h2.requests).toHaveLength(1);
+    expect(h2.connects[0]).toBe("https://agent.api5.cursor.sh");
+    expect(h2.requests[0].headers).toEqual(expect.objectContaining({
+      ":method": "POST",
+      ":path": "/agent.v1.AgentService/GetUsableModels",
+      ":authority": "agent.api5.cursor.sh",
+      ":scheme": "https",
+      "content-type": "application/proto",
+      accept: "application/proto",
+    }));
   });
 
   it("fails open when the Cursor catalog request fails", async () => {
-    global.fetch = vi.fn().mockResolvedValue(new Response("no", { status: 403 }));
+    h2.reply = { status: 403, payload: new TextEncoder().encode("no") };
 
     await expect(resolveCursorModels({
       accessToken: "cursor-token",
