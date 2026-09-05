@@ -240,11 +240,12 @@ async function onboardUser(accessToken, tierID, externalSignal, endpoints, provi
                 }
                 // Say what actually came back — the bare message left no way to
                 // tell a shape change from an account with no project at all.
-                const shape = JSON.stringify({
-                    top: Object.keys(data || {}),
-                    response: Object.keys(data?.response || {}),
-                });
-                throw new Error(`onboardUser done but no project_id in response; keys=${shape}`);
+                const seen = JSON.stringify(
+                    data?.response?.cloudaicompanionProject ?? data?.cloudaicompanionProject ?? null
+                );
+                throw new Error(
+                    `onboardUser done but no project_id in response; cloudaicompanionProject=${String(seen).slice(0, 300)}`
+                );
             }
 
             // Server not done yet – wait and retry
@@ -276,19 +277,37 @@ async function onboardUser(accessToken, tierID, externalSignal, endpoints, provi
 
 /**
  * Extract project ID from loadCodeAssist response.
+ *
+ * cloudaicompanionProject arrives either as the bare id, or as a message whose
+ * id lives under a field name that has moved around (`id`, `projectId`, or a
+ * resource `name` like "projects/xyz"). Reading only `.id` turned the other
+ * shapes into "no project", so all of them are accepted.
  */
+function projectIdFromValue(value) {
+    if (typeof value === "string") {
+        const id = value.trim();
+        return id || null;
+    }
+    if (!value || typeof value !== "object") return null;
+    for (const key of ["id", "projectId", "project"]) {
+        const candidate = value[key];
+        if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+    }
+    // Resource names are "projects/<id>" (optionally with more segments after).
+    if (typeof value.name === "string" && value.name.trim()) {
+        const parts = value.name.trim().split("/").filter(Boolean);
+        const idx = parts.indexOf("projects");
+        const id = idx >= 0 ? parts[idx + 1] : parts[parts.length - 1];
+        if (id) return id;
+    }
+    return null;
+}
+
 function extractProjectId(data) {
     if (!data) return null;
 
-    if (typeof data.cloudaicompanionProject === "string") {
-        const id = data.cloudaicompanionProject.trim();
-        if (id) return id;
-    }
-
-    if (data.cloudaicompanionProject && typeof data.cloudaicompanionProject === "object") {
-        const id = data.cloudaicompanionProject.id;
-        if (typeof id === "string" && id.trim()) return id.trim();
-    }
+    const id = projectIdFromValue(data.cloudaicompanionProject);
+    if (id) return id;
 
     return null;
 }
