@@ -253,6 +253,20 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
       }
     }
   } else if (msg.role === ROLE.ASSISTANT) {
+    // OpenAI-shaped history carries prior reasoning out-of-band in
+    // reasoning_content; without this it is dropped and the model loses its own
+    // chain of thought on every follow-up turn. Anthropic wants thinking first
+    // in the turn, so this runs before the content blocks. The signature is
+    // forwarded when the client supplied one — prepareClaudeRequest drops
+    // thinking blocks carrying a foreign or missing signature, so an unsigned
+    // block degrades to "not sent" rather than a 400.
+    if (typeof msg.reasoning_content === "string" && msg.reasoning_content.trim()) {
+      const thinking = { type: CLAUDE_BLOCK.THINKING, thinking: msg.reasoning_content };
+      const signature = msg.reasoning_signature || msg.thinking_signature;
+      if (signature) thinking.signature = signature;
+      blocks.push(thinking);
+    }
+
     if (Array.isArray(msg.content)) {
       for (const part of msg.content) {
         if (part.type === OPENAI_BLOCK.TEXT && part.text) {

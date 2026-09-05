@@ -7,13 +7,7 @@ import { filterToOpenAIFormat } from "../../open-sse/translator/formats/openai.j
 import { parseSSELine } from "../../open-sse/utils/streamHelpers.js";
 
 describe("request normalization", () => {
-  // KNOWN REGRESSION: the translator used to join every text part into one
-  // string. The DRY refactor in d3f61aac replaced that with collapseTextParts()
-  // in open-sse/translator/concerns/message.js, which only collapses a *lone*
-  // text part ("Matches existing translator behavior" — it does not). Strict
-  // OpenAI-compatible upstreams that reject part arrays see the difference.
-  // Marked it.fails so the suite stays honest: fix the helper and this flips red.
-  it.fails("claudeToOpenAIRequest flattens text-only content arrays into string", () => {
+  it("claudeToOpenAIRequest flattens text-only content arrays into string", () => {
     const body = {
       messages: [
         {
@@ -54,13 +48,7 @@ describe("request normalization", () => {
     expect(Array.isArray(result.messages[0].content)).toBe(true);
   });
 
-  // KNOWN REGRESSION: the translator used to join every text part into one
-  // string. The DRY refactor in d3f61aac replaced that with collapseTextParts()
-  // in open-sse/translator/concerns/message.js, which only collapses a *lone*
-  // text part ("Matches existing translator behavior" — it does not). Strict
-  // OpenAI-compatible upstreams that reject part arrays see the difference.
-  // Marked it.fails so the suite stays honest: fix the helper and this flips red.
-  it.fails("filterToOpenAIFormat flattens text-only arrays to string", () => {
+  it("filterToOpenAIFormat flattens text-only arrays to string", () => {
     const body = {
       messages: [
         {
@@ -77,13 +65,7 @@ describe("request normalization", () => {
     expect(result.messages[0].content).toBe("a\nb");
   });
 
-  // KNOWN REGRESSION: the translator used to join every text part into one
-  // string. The DRY refactor in d3f61aac replaced that with collapseTextParts()
-  // in open-sse/translator/concerns/message.js, which only collapses a *lone*
-  // text part ("Matches existing translator behavior" — it does not). Strict
-  // OpenAI-compatible upstreams that reject part arrays see the difference.
-  // Marked it.fails so the suite stays honest: fix the helper and this flips red.
-  it.fails("translateRequest keeps /v1/messages Claude->OpenAI text payloads string-safe", () => {
+  it("translateRequest keeps /v1/messages Claude->OpenAI text payloads string-safe", () => {
     const body = {
       model: "ollama/gpt-oss:120b",
       system: [{ type: "text", text: "You are helpful." }],

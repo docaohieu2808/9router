@@ -138,6 +138,29 @@ export function detectRequiredCapabilities(body) {
     if (Array.isArray(content)) for (const b of content) scanBlock(b);
   };
 
+  // "search" is request-wide: it rides on tools, not on a message turn. Every
+  // wire spells the built-in differently — Anthropic dates the type
+  // (web_search_20250305), OpenAI Responses uses web_search / web_search_preview,
+  // Gemini nests googleSearch — so match on the family rather than exact ids.
+  // It is a soft capability: reorderByCapabilities only prefers models that
+  // declare `search`, it never drops the ones that do not.
+  if (Array.isArray(body.tools)) {
+    for (const tool of body.tools) {
+      if (!tool || typeof tool !== "object") continue;
+      const type = typeof tool.type === "string" ? tool.type : "";
+      const name = typeof tool.name === "string" ? tool.name : "";
+      if (
+        type.startsWith("web_search") ||
+        name === "web_search" ||
+        type === "google_search" ||
+        "googleSearch" in tool ||
+        "google_search" in tool
+      ) {
+        required.add("search");
+      }
+    }
+  }
+
   const scanMessage = (m) => {
     if (!m || typeof m !== "object") return;
 
@@ -177,8 +200,6 @@ export function detectRequiredCapabilities(body) {
   for (const it of trailingUserItems(body.input)) scanContent(it.content);       // responses
   const contents = body.contents || body.request?.contents;                      // gemini / antigravity
   for (const c of trailingUserItems(contents)) scanContent(c.parts);
-
-  // search: temporarily disabled in auto-switch (feature not wired yet).
 
   return required;
 }
