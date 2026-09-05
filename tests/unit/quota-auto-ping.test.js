@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("open-sse/index.js", () => ({}), { virtual: true });
 
 vi.mock("@/lib/localDb", () => ({
+  // null = unrestricted: the per-key account scoping does not apply in this test.
+  getAllowedConnectionIdsForKey: async () => null,
   getSettings: vi.fn(),
   getProviderConnections: vi.fn(),
   updateProviderConnection: vi.fn(),

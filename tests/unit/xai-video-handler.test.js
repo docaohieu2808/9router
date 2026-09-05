@@ -28,6 +28,8 @@ const tokenMocks = vi.hoisted(() => ({
 vi.mock("@/sse/services/auth.js", () => authMocks);
 vi.mock("@/sse/services/tokenRefresh.js", () => tokenMocks);
 vi.mock("@/lib/localDb", () => ({
+  // null = unrestricted: the per-key account scoping does not apply in this test.
+  getAllowedConnectionIdsForKey: async () => null,
   getSettings: vi.fn(async () => ({ requireApiKey: false })),
   getComboByName: vi.fn(async () => null),
   getModelAliases: vi.fn(async () => ({})),

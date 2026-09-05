@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dbMocks = vi.hoisted(() => ({
   getProviderConnections: vi.fn(),
   updateProviderConnection: vi.fn(),
+  // null = unrestricted: the per-key account scoping does not apply in this test.
+  getAllowedConnectionIdsForKey: async () => null,
 }));
 
 vi.mock("@/lib/localDb", () => dbMocks);

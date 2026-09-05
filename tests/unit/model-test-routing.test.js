@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/localDb", () => ({
+  // null = unrestricted: the per-key account scoping does not apply in this test.
+  getAllowedConnectionIdsForKey: async () => null,
   getApiKeys: mocks.getApiKeys,
 }));
 

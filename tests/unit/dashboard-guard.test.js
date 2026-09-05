@@ -21,6 +21,8 @@ vi.mock("next/server", () => ({
 }));
 
 vi.mock("@/lib/localDb", () => ({
+  // null = unrestricted: the per-key account scoping does not apply in this test.
+  getAllowedConnectionIdsForKey: async () => null,
   getSettings: mocks.getSettings,
   validateApiKey: mocks.validateApiKey,
 }));
