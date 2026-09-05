@@ -6,6 +6,7 @@ import {
   clearAccountError,
   extractApiKey,
   isValidApiKey,
+  isProviderAllowedForKey,
 } from "../services/auth.js";
 import { handleAntigravityQuotaError, clearAntigravityStrikes } from "../services/antigravityQuota.js";
 import { getSettings, getAllowedConnectionIdsForKey } from "@/lib/localDb";
@@ -245,6 +246,13 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
       }
       if (excludeConnectionIds.size === 0) {
+        if (!(await isProviderAllowedForKey(provider, allowedConnectionIds))) {
+          log.warn("AUTH", `${provider} not assigned to this API key`);
+          return errorResponse(
+            HTTP_STATUS.FORBIDDEN,
+            `This API key is not assigned any ${provider} account. Assign one on the key's Accounts list, or use a model from a provider it can reach.`
+          );
+        }
         log.warn("AUTH", `No active credentials for provider: ${provider}`);
         return errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`);
       }

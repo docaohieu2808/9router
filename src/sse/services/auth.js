@@ -372,3 +372,21 @@ export async function isValidApiKey(apiKey) {
   if (!apiKey) return false;
   return await validateApiKey(apiKey);
 }
+
+/**
+ * Does this key have any connection at all for `provider`?
+ *
+ * Without this the two very different situations — a key that was never given
+ * access to a provider, and a provider whose accounts are all down — both
+ * surface as "No active credentials", which sends whoever is debugging after
+ * an outage that is not happening.
+ *
+ * @param {string} provider
+ * @param {Set<string>|null} allowedConnectionIds  null = unrestricted key
+ * @returns {Promise<boolean>}
+ */
+export async function isProviderAllowedForKey(provider, allowedConnectionIds) {
+  if (!allowedConnectionIds) return true;
+  const connections = await getProviderConnections({ provider, isActive: true });
+  return (connections || []).some((c) => allowedConnectionIds.has(c.id));
+}

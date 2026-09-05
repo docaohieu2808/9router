@@ -18,6 +18,8 @@ import { resolveZedModels } from "open-sse/shared/zedAuth.js";
 import { updateProviderCredentials } from "@/sse/services/tokenRefresh";
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { capabilitiesFromServiceKind, getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { getAllowedConnectionIdsForKey } from "@/lib/localDb";
+import { extractApiKey } from "@/sse/services/auth.js";
 
 // Per-provider live model resolvers. Each receives a connection record and
 // returns { models: [{ id, name? }, ...] } | null on failure.
@@ -250,6 +252,11 @@ export async function buildModelsList(kindFilter, options = {}) {
   try {
     connections = await getProviderConnections();
     connections = connections.filter(c => c.isActive !== false);
+    // Per-key account scoping: a key restricted to a subset of connections must
+    // not be shown models it will only be refused on. null = unrestricted key.
+    if (options.allowedConnectionIds) {
+      connections = connections.filter(c => options.allowedConnectionIds.has(c.id));
+    }
   } catch (e) {
     console.log("Could not fetch providers, returning all models");
   }
@@ -562,7 +569,9 @@ export async function GET(request) {
   try {
     // Detect cross-instance recursive /models fetch (another 9router fetching our /models)
     const skipDynamicFetch = request?.headers?.get(INTERNAL_MODELS_FETCH_HEADER) === "1";
-    const data = await buildModelsList([LLM_KIND], { skipDynamicFetch });
+    const apiKey = extractApiKey(request);
+    const allowedConnectionIds = apiKey ? await getAllowedConnectionIdsForKey(apiKey) : null;
+    const data = await buildModelsList([LLM_KIND], { skipDynamicFetch, allowedConnectionIds });
     return Response.json({ object: "list", data }, {
       headers: { "Access-Control-Allow-Origin": "*" },
     });
