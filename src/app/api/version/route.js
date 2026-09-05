@@ -53,6 +53,12 @@ async function getLatestVersionCached() {
 }
 
 export async function GET() {
+  // Self-built images track a patched branch, not an npm release, so the npm
+  // lookup would nag forever. UPDATE_CHECK=off skips it (and the outbound call).
+  if (String(process.env.UPDATE_CHECK || "").toLowerCase() === "off") {
+    return Response.json({ currentVersion: pkg.version, latestVersion: null, hasUpdate: false });
+  }
+
   const latestVersion = await getLatestVersionCached();
   const currentVersion = pkg.version;
   const hasUpdate = latestVersion ? compareVersions(latestVersion, currentVersion) > 0 : false;
