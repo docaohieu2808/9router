@@ -93,6 +93,9 @@ describe("web fetch account state", () => {
       "jina-reader",
       expect.any(Set),
       "webfetch:jina-reader",
+      // Fourth argument is this fork's per-key account scoping; null = the key
+      // is unrestricted, which is what the fixture above sets up.
+      { allowedConnectionIds: null },
     );
     expect(mocks.markAccountUnavailable).not.toHaveBeenCalled();
   });

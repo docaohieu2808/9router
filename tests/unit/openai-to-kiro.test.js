@@ -11,7 +11,11 @@ import { openaiToKiroRequest } from "../../open-sse/translator/request/openai-to
 
 const contentOf = (result) =>
   result.conversationState.currentMessage.userInputMessage.content;
-const systemPromptOf = (result) => result.systemPrompt || "";
+// 1fc2a81d dropped the redundant top-level payload.systemPrompt; the same text
+// now reaches Kiro as the content prefix of the current user message, so that is
+// where these assertions have to look.
+const systemPromptOf = (result) =>
+  result?.conversationState?.currentMessage?.userInputMessage?.content || "";
 
 describe("openaiToKiroRequest", () => {
   describe("basic message conversion", () => {
@@ -587,9 +591,16 @@ describe("openaiToKiroRequest", () => {
         {}
       );
 
-      expect(first.systemPrompt).toBe(second.systemPrompt);
-      expect(first.systemPrompt).not.toContain("Current time");
-      expect(first.conversationState.currentMessage.userInputMessage.content).toContain("Current time");
+      // The stable half of the prefix (thinking/agentic instructions) must be
+      // byte-identical across turns so the upstream prefix cache keeps hitting;
+      // only the volatile "[Context: Current time ...]" tail may differ. Before
+      // 1fc2a81d these lived in payload.systemPrompt and the message content
+      // respectively — now they share one string, split on that marker.
+      const stableOf = (r) => systemPromptOf(r).split("[Context: Current time")[0];
+
+      expect(stableOf(first)).toBe(stableOf(second));
+      expect(stableOf(first)).not.toContain("Current time");
+      expect(systemPromptOf(first)).toContain("Current time");
     });
 
     it("replays frozen msg0 for explicit Kiro sessions while keeping current time fresh", () => {
