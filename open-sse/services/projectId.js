@@ -238,7 +238,13 @@ async function onboardUser(accessToken, tierID, externalSignal, endpoints, provi
                     console.log(`[ProjectId] Successfully onboarded, project ID: ${projectId}`);
                     return projectId;
                 }
-                throw new Error("onboardUser done but no project_id in response");
+                // Say what actually came back — the bare message left no way to
+                // tell a shape change from an account with no project at all.
+                const shape = JSON.stringify({
+                    top: Object.keys(data || {}),
+                    response: Object.keys(data?.response || {}),
+                });
+                throw new Error(`onboardUser done but no project_id in response; keys=${shape}`);
             }
 
             // Server not done yet – wait and retry
@@ -289,21 +295,12 @@ function extractProjectId(data) {
 
 /**
  * Extract project ID from onboardUser response.
+ *
+ * The long-running-operation envelope is not guaranteed: the project has been
+ * seen both under `response` and at the top level, and reading only the former
+ * turned a perfectly good answer into "done but no project_id".
  */
 function extractProjectIdFromOnboard(data) {
-    if (!data?.response) return null;
-
-    const project = data.response.cloudaicompanionProject;
-
-    if (typeof project === "string") {
-        const id = project.trim();
-        if (id) return id;
-    }
-
-    if (project && typeof project === "object") {
-        const id = project.id;
-        if (typeof id === "string" && id.trim()) return id.trim();
-    }
-
-    return null;
+    if (!data) return null;
+    return extractProjectId(data.response) || extractProjectId(data);
 }
