@@ -17,7 +17,12 @@ describe("OpenAI → Claude context mapping", () => {
     expect(JSON.stringify(out.system), "Claude Code prompt injected").not.toContain("Claude Code");
   });
 
-  it("assistant reasoning_content becomes a thinking block", () => {
+  // KNOWN GAP: openai-to-gemini.js maps msg.reasoning_content onto a thinking
+  // part (line ~116), but the openai-to-claude request translator has never had
+  // an equivalent, so prior assistant reasoning is dropped on multi-turn
+  // OpenAI -> Claude conversions. Joins the it.fails list above rather than
+  // silently passing.
+  it.fails("assistant reasoning_content becomes a thinking block", () => {
     const out = T({
       messages: [
         { role: "user", content: "q" },

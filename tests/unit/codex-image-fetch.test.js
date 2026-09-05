@@ -11,7 +11,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // Mock DNS so the SSRF guard treats example.com as public.
-vi.mock("node:dns/promises", () => ({ lookup: async () => ({ address: "93.184.216.34" }) }));
+// ssrfGuard resolves through `import dns from "node:dns"` and calls
+// dns.promises.lookup(host, { all: true }), so the mock has to cover the
+// default export and return an array of { address, family } records.
+vi.mock("node:dns", () => {
+  const lookup = async () => [{ address: "93.184.216.34", family: 4 }];
+  return { default: { promises: { lookup } }, promises: { lookup } };
+});
 
 import { CodexExecutor } from "../../open-sse/executors/codex.js";
 import * as proxyFetchModule from "../../open-sse/utils/proxyFetch.js";

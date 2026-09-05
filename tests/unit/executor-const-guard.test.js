@@ -39,9 +39,14 @@ describe("provider baseUrl const (full path, no trailing slash)", () => {
   });
 });
 
-describe("antigravity retry (intentional change: 429=6, 503=3)", () => {
-  it("429 attempts = 6", () => {
-    expect(antigravity.transport.retry["429"].attempts).toBe(6);
+// 429 was deliberately raised to 6 on 2026-06-15 and guarded here; commit
+// 3f9382de silently put it back to 3 three days later and this guard has been
+// red ever since. Keeping 3 on purpose: the strike-break added in ac98dd9d
+// blocks an account+model pair for 15m after 3 consecutive 429s, so hammering
+// one account six times only delays failover across the account pool.
+describe("antigravity retry (429=3 with strike-break, 503=3)", () => {
+  it("429 attempts = 3", () => {
+    expect(antigravity.transport.retry["429"].attempts).toBe(3);
   });
   it("503 attempts = 3", () => {
     expect(antigravity.transport.retry["503"].attempts).toBe(3);

@@ -1,8 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock DNS lookup so we control which host resolves to what IP.
+// ssrfGuard resolves through `import dns from "node:dns"` and calls
+// dns.promises.lookup(host, { all: true }), so the mock has to cover the
+// default export and return an array of { address, family } records.
 const lookupMock = vi.fn();
-vi.mock("node:dns/promises", () => ({ lookup: (...a) => lookupMock(...a) }));
+vi.mock("node:dns", () => ({
+  default: { promises: { lookup: (...a) => lookupMock(...a) } },
+  promises: { lookup: (...a) => lookupMock(...a) },
+}));
 
 import { fetchImageAsBase64 } from "../../open-sse/translator/concerns/image.js";
 
@@ -23,7 +29,7 @@ function mockFetchOnce(bytes, ok = true) {
 
 beforeEach(() => {
   lookupMock.mockReset();
-  lookupMock.mockResolvedValue({ address: "93.184.216.34" }); // public by default
+  lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]); // public by default
 });
 afterEach(() => { vi.restoreAllMocks(); });
 

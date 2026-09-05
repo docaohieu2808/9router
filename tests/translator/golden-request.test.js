@@ -27,10 +27,12 @@ function baseBody() {
   };
 }
 
-// Khử field động: toolNameMap, kiro conversationId (uuid), timestamp trong content.
+// Khử field động: toolNameMap, kiro conversationId + agentContinuationId (uuid),
+// timestamp trong content. agentContinuationId là uuid sinh mới mỗi lần gọi, không
+// khử thì snapshot không bao giờ khớp hai lần liên tiếp.
 function clean(body) {
   const s = JSON.stringify(body, (k, v) => {
-    if (k === "_toolNameMap" || k === "conversationId") return undefined;
+    if (k === "_toolNameMap" || k === "conversationId" || k === "agentContinuationId") return undefined;
     return v;
   }).replace(/Current time is [^"\\]+/g, "Current time is <TS>");
   return JSON.parse(s);
