@@ -147,4 +147,16 @@ export const TTS_PROVIDER_CONFIG = {
     modelKey: "xiaomi-mimo-tts-models",
     voicesPerModel: true,
   },
+  "omnivoice": {
+    hasLanguageDropdown: false,
+    hasLanguageHint: true, // 600+ languages; sent as body.language, "Auto" when omitted
+    hasModelSelector: true, // design | clone
+    hasBrowseButton: false,
+    hasVoiceIdInput: true, // voices are token combos ("female-young"), not a fixed list
+    hasStyleInput: true, // free-form instruct (clone) / "whisper" preset (design)
+    voiceSource: "hardcoded",
+    modelKey: "omnivoice-tts-models",
+    voiceKey: "omnivoice-tts-voices",
+    voicesPerModel: true,
+  },
 };

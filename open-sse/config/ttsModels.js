@@ -36,6 +36,26 @@ const GEMINI_VOICES = [
 // Xiaomi MiMo preset voices (from https://mimo.mi.com/docs/zh-CN/quick-start/usage-guide/audio/speech-synthesis-v2.5).
 // Voice id is passed via `audio.voice`; `mimo_default` = default (冰糖 on CN cluster, Mia elsewhere).
 // Voices are language-independent — the spoken language is a separate hint, not bound to the voice.
+// OmniVoice designs a voice from attribute dropdowns instead of exposing voice ids, so a
+// "voice" here is a dash-joined token list the adapter maps back onto those dropdowns.
+// These are presets — any combination of the documented tokens is valid.
+const OMNIVOICE_VOICES = [
+  { id: "female-young",           name: "Female, young adult" },
+  { id: "female-middle",          name: "Female, middle-aged" },
+  { id: "female-elderly",         name: "Female, elderly" },
+  { id: "female-child",           name: "Female, child" },
+  { id: "female-young-high",      name: "Female, young, high pitch" },
+  { id: "female-whisper",         name: "Female, whisper" },
+  { id: "male-young",             name: "Male, young adult" },
+  { id: "male-middle",            name: "Male, middle-aged" },
+  { id: "male-elderly",           name: "Male, elderly" },
+  { id: "male-child",             name: "Male, child" },
+  { id: "male-young-low",         name: "Male, young, low pitch" },
+  { id: "male-whisper",           name: "Male, whisper" },
+  { id: "female-young-british",   name: "Female, young, British accent" },
+  { id: "male-young-american",    name: "Male, young, American accent" },
+].map((v) => ({ ...v, type: "tts" }));
+
 const MIMO_VOICES = [
   { id: "mimo_default", name: "mimo_default" },
   { id: "冰糖",           name: "冰糖" },
@@ -129,6 +149,18 @@ export const TTS_MODELS_CONFIG = {
     voices: {
       "mimo-v2.5-tts": MIMO_VOICES,
     },
+  },
+  omnivoice: {
+    models: [
+      { id: "design", name: "Voice Design (attributes)", type: "tts" },
+      { id: "clone", name: "Voice Clone (reference audio)", type: "tts" },
+    ],
+    voices: {
+      design: OMNIVOICE_VOICES,
+      // Clone takes its voice from the reference audio, so it has no preset list.
+      clone: [],
+    },
+    allVoices: OMNIVOICE_VOICES,
   },
 };
 

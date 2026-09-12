@@ -48,7 +48,7 @@ function createTtsResponse(base64Audio, format, responseFormat) {
  *
  * @returns {Promise<{success, response, status?, error?}>}
  */
-export async function handleTtsCore({ provider, model, input, credentials, responseFormat = "mp3", language, style }) {
+export async function handleTtsCore({ provider, model, input, credentials, responseFormat = "mp3", language, style, refAudio, refText }) {
   if (!input?.trim()) {
     return createErrorResult(HTTP_STATUS.BAD_REQUEST, "Missing required field: input");
   }
@@ -57,7 +57,9 @@ export async function handleTtsCore({ provider, model, input, credentials, respo
     // Special-case adapters (google-tts, edge-tts, local-device, elevenlabs, openai, openrouter, gemini, xiaomi-mimo)
     const adapter = getTtsAdapter(provider);
     if (adapter) {
-      const result = await adapter.synthesize(input.trim(), model, credentials, responseFormat, { language, style });
+      // refAudio/refText are only meaningful to voice-cloning adapters (omnivoice); every
+      // other adapter ignores the extra options.
+      const result = await adapter.synthesize(input.trim(), model, credentials, responseFormat, { language, style, refAudio, refText });
       // Adapter may return a full {success, response} (legacy) or {base64, format}
       if (result.success !== undefined) return result;
       return createTtsResponse(result.base64, result.format, responseFormat);

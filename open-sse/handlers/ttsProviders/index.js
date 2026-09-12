@@ -8,6 +8,7 @@ import openrouter from "./openrouter.js";
 import gemini, { fetchGeminiVoices } from "./gemini.js";
 import xiaomiMimo from "./xiaomi-mimo.js";
 import selfhostedTts from "./selfhostedTts.js";
+import omnivoice from "./omnivoice.js";
 import { FORMAT_HANDLERS } from "./genericFormats.js";
 import { parseModelVoice } from "./_base.js";
 
@@ -22,6 +23,7 @@ const SPECIAL_ADAPTERS = {
   gemini,
   "xiaomi-mimo": xiaomiMimo,
   "selfhosted-tts": selfhostedTts,
+  omnivoice,
 };
 
 export function getTtsAdapter(provider) {
