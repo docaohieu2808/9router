@@ -222,6 +222,24 @@ async function fetchCompatibleModelIds(connection) {
   }
 }
 
+// TTS catalogues live in two places the per-connection loop never reads: PROVIDER_MODELS keys
+// like "elevenlabs-tts-models" (built by buildTtsProviderModels) and each registry entry's
+// ttsConfig.models. Without them /v1/models/tts answers with nothing for ElevenLabs, OpenAI,
+// Gemini, MiniMax and friends — the models are callable but invisible.
+function ttsModelsFor(providerId, alias) {
+  const seen = new Map();
+  const push = (m) => {
+    const id = typeof m === "string" ? m : m?.id;
+    if (!id || seen.has(id)) return;
+    seen.set(id, { id, name: (typeof m === "object" && m.name) || id });
+  };
+  for (const key of [`${alias}-tts-models`, `${providerId}-tts-models`]) {
+    for (const m of PROVIDER_MODELS[key] || []) push(m);
+  }
+  for (const m of AI_PROVIDERS[providerId]?.ttsConfig?.models || []) push(m);
+  return [...seen.values()];
+}
+
 // Provider matches kindFilter when its serviceKinds intersect the requested kinds.
 // LLM is the default kind for providers missing serviceKinds.
 function providerMatchesKinds(providerId, kindFilter) {
@@ -516,6 +534,14 @@ export async function buildModelsList(kindFilter, options = {}) {
         models.push(model);
       }
 
+      // TTS voices/models for a connected provider (elevenlabs, openai, gemini, ...).
+      if (kindFilter.includes("tts")) {
+        for (const model of ttsModelsFor(providerId, staticAlias)) {
+          if (isDisabled(outputAlias, model.id) || isDisabled(staticAlias, model.id)) continue;
+          models.push({ id: `${outputAlias}/${model.id}`, object: "model", owned_by: outputAlias, kind: "tts" });
+        }
+      }
+
       // Web search/fetch — provider IS the model, expose as {alias}/search and/or {alias}/fetch with explicit kind
       const providerInfo = AI_PROVIDERS[providerId];
       if (kindFilter.includes("webSearch") && providerInfo?.searchConfig) {
@@ -533,6 +559,29 @@ export async function buildModelsList(kindFilter, options = {}) {
           kind: "webFetch",
           owned_by: outputAlias,
         });
+      }
+    }
+  }
+
+  // noAuth providers (edge-tts, google-tts, omnivoice, ...) never have a connection, so the
+  // per-connection loop above cannot reach them — yet /v1/audio/speech and /v1/audio/transcriptions
+  // serve them to any caller. Without this they are callable but undiscoverable, and a client that
+  // builds its UI from /v1/models/{kind} shows none of the free voices.
+  for (const [providerId, provider] of Object.entries(AI_PROVIDERS)) {
+    if (!provider?.noAuth || provider.hidden) continue;
+    if (activeConnectionByProvider.has(providerId)) continue;
+    if (!providerMatchesKinds(providerId, kindFilter)) continue;
+
+    const alias = getProviderAlias(providerId) || PROVIDER_ID_TO_ALIAS[providerId] || providerId;
+    for (const model of PROVIDER_MODELS[alias] || PROVIDER_MODELS[providerId] || []) {
+      if (!kindFilter.includes(modelKind(model))) continue;
+      if (isDisabled(alias, model.id)) continue;
+      models.push({ id: `${alias}/${model.id}`, object: "model", owned_by: alias });
+    }
+    if (kindFilter.includes("tts")) {
+      for (const model of ttsModelsFor(providerId, alias)) {
+        if (isDisabled(alias, model.id)) continue;
+        models.push({ id: `${alias}/${model.id}`, object: "model", owned_by: alias, kind: "tts" });
       }
     }
   }

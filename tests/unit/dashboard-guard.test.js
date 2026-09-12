@@ -55,6 +55,23 @@ function localRequest(pathname, headers = {}) {
   return request(pathname, { "x-9r-peer-token": PEER_TOKEN, "x-9r-real-ip": "127.0.0.1", ...headers });
 }
 
+describe("dashboard guard CORS on rejection", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getSettings.mockResolvedValue({ requireApiKey: true });
+    mocks.validateApiKey.mockResolvedValue(false);
+    mocks.getConsistentMachineId.mockResolvedValue("machine-id");
+  });
+
+  it("sends Access-Control-Allow-Origin with the 401, so a browser can read it", async () => {
+    const response = await proxy(request("/v1/models/tts", { host: "router.example.com", origin: "https://voice.example.com" }));
+
+    expect(response.status).toBe(401);
+    const init = mocks.jsonResponse.mock.calls.at(-1)[1];
+    expect(init.headers["Access-Control-Allow-Origin"]).toBe("*");
+  });
+});
+
 describe("dashboard guard public LLM API access", () => {
   beforeEach(() => {
     vi.clearAllMocks();

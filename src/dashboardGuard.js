@@ -223,7 +223,13 @@ export async function proxy(request) {
     // cross-origin request that sends an Authorization header.
     if (request.method === "OPTIONS") return NextResponse.next();
     if (await canAccessPublicLlmApi(request)) return NextResponse.next();
-    return NextResponse.json({ error: "API key required for remote API access" }, { status: 401 });
+    // The rejection needs the same CORS header the routes send. Without it a browser
+    // client discards the 401 and can only report a generic network failure, so "wrong
+    // API key" and "router unreachable" become indistinguishable in the UI.
+    return NextResponse.json(
+      { error: "API key required for remote API access" },
+      { status: 401, headers: { "Access-Control-Allow-Origin": "*" } },
+    );
   }
 
   // Deny-by-default for /api/* — public allow-list bypasses, everything else requires auth.

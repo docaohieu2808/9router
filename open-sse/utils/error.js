@@ -122,7 +122,13 @@ export function unavailableResponse(statusCode, message, retryAfter, retryAfterH
       status: statusCode,
       headers: {
         "Content-Type": "application/json",
-        "Retry-After": String(retryAfterSec)
+        "Retry-After": String(retryAfterSec),
+        // Same CORS treatment as errorResponse: without it a browser client sees an opaque
+        // network failure instead of "provider is rate limited, retry in N seconds" — the one
+        // error where the body and the header are the whole point. Retry-After needs the
+        // explicit expose header, since it is not a CORS-safelisted response header.
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "Retry-After"
       }
     }
   );
