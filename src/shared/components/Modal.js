@@ -15,6 +15,7 @@ export default function Modal({
   closeOnOverlay = true,
   showTrafficLights = true,
   className,
+  bodyClassName,
 }) {
   const sizes = {
     sm: "max-w-sm",
@@ -98,8 +99,11 @@ export default function Modal({
           </div>
         )}
 
-        {/* Body */}
-        <div className="p-6 max-h-[calc(85vh-100px)] overflow-y-auto custom-scrollbar">{children}</div>
+        {/* Body. A modal that scrolls a region of its own passes bodyClassName to take
+            the scrolling over — otherwise the two scrollers nest and both show a bar. */}
+        <div className={bodyClassName || "p-6 max-h-[calc(85vh-100px)] overflow-y-auto custom-scrollbar"}>
+          {children}
+        </div>
 
         {/* Footer */}
         {footer && (

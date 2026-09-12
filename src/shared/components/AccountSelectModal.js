@@ -56,36 +56,40 @@ export default function AccountSelectModal({
       onClose={() => { onClose(); setSearchQuery(""); }}
       title="Scope Accounts"
       size="md"
-      className="p-4!"
       footer={null}
+      bodyClassName="flex flex-col gap-3 p-4 max-h-[calc(85vh-64px)] overflow-hidden"
     >
       {/* Info bar */}
-      <div className="flex items-center gap-2 mb-3 px-2.5 py-2 bg-primary/8 border border-primary/20 rounded-lg text-xs text-text-muted">
-        <span className="material-symbols-outlined text-primary shrink-0" style={{ fontSize: "14px" }}>info</span>
-        <span>Click to add, click again to remove. Changes are saved automatically. {" "}Leave none selected to allow every account (unrestricted).</span>
+      <div className="shrink-0 flex items-start gap-2 px-2.5 py-2 bg-primary/8 border border-primary/20 rounded-lg text-xs text-text-muted leading-relaxed">
+        <span className="material-symbols-outlined text-primary shrink-0 mt-px" style={{ fontSize: "14px" }}>info</span>
+        <span>
+          Tap to add or remove — saved automatically.
+          {" "}
+          {selectedIds.length > 0
+            ? <span className="text-text-main font-medium whitespace-nowrap">{selectedIds.length} selected.</span>
+            : <span className="text-text-main font-medium">None selected: every account is allowed.</span>}
+        </span>
       </div>
 
       {/* Search */}
-      <div className="mb-3">
-        <div className="relative">
-          <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted text-[16px]">
-            search
-          </span>
-          <input
-            type="text"
-            placeholder="Search accounts..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 bg-surface border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
-          />
-        </div>
+      <div className="shrink-0 relative">
+        <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted text-[16px]">
+          search
+        </span>
+        <input
+          type="text"
+          placeholder="Search accounts..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-8 pr-3 py-2 bg-surface border border-border rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+        />
       </div>
 
-      {/* Accounts grouped by provider */}
-      <div className="max-h-[400px] overflow-y-auto space-y-3">
+      {/* Accounts grouped by provider — the only scrolling region in this modal */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-3 pr-1">
         {Object.entries(filteredGroups).map(([providerId, group]) => (
           <div key={providerId}>
-            <div className="flex items-center gap-1.5 mb-1.5 sticky top-0 bg-surface py-0.5">
+            <div className="flex items-center gap-1.5 mb-1.5 sticky top-0 z-10 bg-surface py-1">
               <ProviderIcon
                 providerId={providerId}
                 alt={group.name}
@@ -106,7 +110,7 @@ export default function AccountSelectModal({
                     disabled={saving}
                     onClick={() => onToggleAccount(conn.id)}
                     className={`
-                      px-2 py-1 rounded-xl text-xs font-medium transition-all border hover:cursor-pointer
+                      px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all border hover:cursor-pointer
                       ${isSelected
                         ? "bg-primary border-primary text-white hover:bg-primary-hover"
                         : "bg-surface border-border text-text-main hover:border-primary/50 hover:bg-primary/5"
